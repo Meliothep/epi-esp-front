@@ -1,25 +1,28 @@
 {
-  "name": "vite-template-solid",
-  "version": "0.0.0",
-  "description": "",
+  "name": "dndiscord-frontend",
+  "private": true,
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "start": "vite",
     "dev": "vite",
     "build": "vite build",
-    "serve": "vite preview"
-  },
-  "license": "MIT",
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.1.13",
-    "solid-devtools": "^0.34.3",
-    "tailwindcss": "^4.1.13",
-    "typescript": "^5.9.2",
-    "vite": "^7.1.4",
-    "vite-plugin-solid": "^2.11.8"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "axios": "^1.13.2",
-    "solid-js": "^1.9.9"
+    "solid-js": "^1.8.13",
+    "@solidjs/router": "^0.13.2",
+    "axios": "^1.6.2",
+    "@babylonjs/core": "^6.38.0",
+    "@babylonjs/loaders": "^6.38.0",
+    "@babylonjs/inspector": "^6.38.0"
+  },
+  "devDependencies": {
+    "@solidjs/testing-library": "^0.8.5",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vite-plugin-solid": "^2.7.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32"
   }
 }

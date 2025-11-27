@@ -1,36 +1,147 @@
-## Usage
+# DNDiscord Frontend
 
-Those templates dependencies are maintained via [pnpm](https://pnpm.io) via `pnpm up -Lri`.
+Frontend SolidJS pour l'application DNDiscord - Plateforme de jeu de rôle intégrée à Discord.
 
-This is the reason you see a `pnpm-lock.yaml`. That being said, any package manager will work. This file can be safely be removed once you clone a template.
+## 🚀 Structure du projet
 
-```bash
-$ npm install # or pnpm install or yarn install
+```
+src/
+├── App.tsx                  # Routeur principal et setup des Providers
+├── index.tsx               # Point d'entrée de l'application
+├── index.css               # Styles globaux (Tailwind CSS)
+├── components/
+│   └── ProtectedRoute.tsx  # Composant pour protéger les routes
+├── pages/
+│   ├── LoginPage.tsx       # Page de login
+│   ├── DashboardPage.tsx   # Page tableau de bord
+│   ├── CharacterCreationPage.tsx  # Création de personnage
+│   └── GameBoardPage.tsx   # Plateau de jeu 3D
+└── stores/
+    ├── userStore.ts        # Store utilisateur (avec Context API)
+    └── characterStore.ts   # Store personnages (avec Context API)
 ```
 
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
+## 📦 Installation
 
-## Available Scripts
+### Prérequis
 
-In the project directory, you can run:
+- Node.js 18+
+- npm ou yarn
 
-### `npm run dev` or `npm start`
+### Setup
 
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+```bash
+npm install
+```
 
-The page will reload if you make edits.<br>
+## 🔧 Scripts disponibles
 
-### `npm run build`
+### Développement
 
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
+```bash
+npm run dev
+```
 
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
+Démarre le serveur de développement sur `http://localhost:3000`
 
-## Deployment
+### Build
 
-You can deploy the `dist` folder to any static host provider (netlify, surge, now, etc.)
+```bash
+npm run build
+```
 
-## This project was created with the [Solid CLI](https://github.com/solidjs-community/solid-cli)
+Compile l'application pour la production dans le dossier `dist/`
+
+### Preview
+
+```bash
+npm run preview
+```
+
+Prévisualise le build de production localement
+
+## 📚 Architecture
+
+### Stores
+
+#### `userStore.ts`
+
+Gère l'état utilisateur global :
+
+- `user` - Utilisateur actuellement authentifié
+- `login()` - Connecter un utilisateur
+- `logout()` - Déconnecter l'utilisateur
+- `isLoading` - État de chargement
+
+**Utilisation :**
+
+```typescript
+import { useUser } from '@/stores/userStore';
+
+function MyComponent() {
+  const { user, login, logout } = useUser();
+  
+  return <div>{user()?.username}</div>;
+}
+```
+
+#### `characterStore.ts`
+
+Gère les personnages de l'utilisateur :
+
+- `characters` - Liste des personnages
+- `addCharacter()` - Ajouter un personnage
+- `removeCharacter()` - Supprimer un personnage
+- `updateCharacter()` - Mettre à jour un personnage
+- `currentCharacter` - Personnage actuellement sélectionné
+
+**Utilisation :**
+
+```typescript
+import { useCharacter } from '@/stores/characterStore';
+
+function CharacterList() {
+  const { characters, addCharacter } = useCharacter();
+  
+  return (
+    <div>
+      {characters().map(char => <div>{char.name}</div>)}
+    </div>
+  );
+}
+```
+
+### Routes protégées
+
+Le composant `ProtectedRoute` redirige vers `/login` si l'utilisateur n'est pas authentifié :
+
+```typescript
+<Route
+  path="/dashboard"
+  component={() => (
+    <ProtectedRoute>
+      <DashboardPage />
+    </ProtectedRoute>
+  )}
+/>
+```
+
+## 🛠️ Stack technologique
+
+- **SolidJS** - Framework réactif
+- **Solid Router** - Gestion du routage
+- **TypeScript** - Typage statique
+- **Tailwind CSS** - Framework CSS utility-first
+- **Vite** - Build tool et dev server
+
+## 📝 Prochaines étapes
+
+- [ ] Intégration Discord OAuth
+- [ ] Connexion au backend (API Gateway Ocelot)
+- [ ] Intégration WebSocket pour la synchronisation
+- [ ] Implémentation de la grille 3D avec BabylonJS
+- [ ] Création d'interface utilisateur complète
+
+## 📄 License
+
+MIT

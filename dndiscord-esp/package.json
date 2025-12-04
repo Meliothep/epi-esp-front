@@ -10,9 +10,10 @@
     "typecheck": "tsc -b --pretty"
   },
   "dependencies": {
+    "@babylonjs/core": "^7.12.0",
     "@iconify-icon/solid": "^3.0.3",
     "@solidjs/router": "^0.14.5",
-    "@babylonjs/core": "^7.12.0",
+    "axios": "^1.13.2",
     "lucide-solid": "^0.548.0",
     "solid-js": "^1.9.3"
   },

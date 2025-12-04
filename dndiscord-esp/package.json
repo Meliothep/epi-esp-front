@@ -15,7 +15,9 @@
     "@solidjs/router": "^0.14.5",
     "axios": "^1.13.2",
     "lucide-solid": "^0.548.0",
-    "solid-js": "^1.9.3"
+    "solid-js": "^1.9.3",
+    "solid-styled-jsx": "^0.27.1",
+    "styled-jsx": "^3.4.7"
   },
   "devDependencies": {
     "@iconify-json/game-icons": "^1.2.3",

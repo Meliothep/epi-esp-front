@@ -1,10 +1,11 @@
 import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
+import './index.css';
 import App from './App';
 import CreateCharacter from './pages/CreateCharacter';
 import Rules from './pages/Rules';
 import Play from './pages/Play';
-import './index.css';
+import type {} from "solid-styled-jsx";
 
 render(
 	() => (

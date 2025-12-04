@@ -151,6 +151,10 @@ html, body, #root {
 	filter: drop-shadow(0 0 8px rgba(255,255,255,0.35));
 }
 
+.menu-badge:hover{
+	animation: btnGradientPan 1800ms ease-in-out;
+}
+
 /* Top-right settings button */
 .settings-btn {
 	@apply fixed top-4 right-4 inline-grid place-items-center w-11 h-11 rounded-xl border border-transparent text-slate-200 shadow-soft focus:outline-none;
@@ -186,3 +190,9 @@ html, body, #root {
 
 .art-enter { animation: fadeInUp 350ms ease-out forwards; }
 .art-exit { animation: fadeOutRight 350ms ease-in forwards; }
+
+.vignette_picture {
+	width: 7em;
+	border-radius: 10%;
+
+}

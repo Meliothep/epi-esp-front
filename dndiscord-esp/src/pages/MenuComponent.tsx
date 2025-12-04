@@ -5,12 +5,13 @@ import { Settings } from 'lucide-solid'
 import { GameIconsFoldedPaper } from '../components/common/GameIconsFoldedPaper'
 import { GameIconsPencilBrush } from '../components/common/GameIconsPencilBrush'
 import { GameIconsCrossedSwords } from '../components/common/GameIconsCrossedSwords'
+import ButtonMenu from '../components/common/ButtonMenu';
 
 export default function MenuComponent() {
     const [hovered, setHovered] = createSignal<string | null>(null);
     const [menuItems,setMenuItems] = createSignal<Array<{label:string,icon?:JSX.Element,hoveringLabel:string,route:string,hoveringDescription?:string}>>([
         {label: 'Jouer', icon: <GameIconsCrossedSwords class="menu-badge-icon h-12 w-12" />, hoveringLabel: 'play', route: '/play',hoveringDescription:'Commencez une aventure en un clic.'},
-        {label: 'Personnages', icon: <GameIconsPencilBrush class="menu-badge-icon h-10 w-10" />, hoveringLabel: 'create', route: '/create',hoveringDescription:'Forgez un héros pour vos quêtes.'},
+        {label: 'Personnages', icon: <GameIconsPencilBrush class="menu-badge-icon h-10 w-10" />, hoveringLabel: 'characters', route: '/characters',hoveringDescription:'Forgez un héros pour vos quêtes.'},
         {label: 'Règles du jeu', icon: <GameIconsFoldedPaper class="menu-badge-icon h-10 w-10" />, hoveringLabel: 'rules', route: '/rules',hoveringDescription:'Consultez les règles du jeu.'},
     ]);
     const navigate = useNavigate();
@@ -39,17 +40,11 @@ export default function MenuComponent() {
                 <section class="flex w-full flex-col items-center gap-4">
                     <For each={menuItems()}>
                         {(item) => (
-                            <div class="menu-row w-full sm:w-auto">
-                                <span class="menu-badge"><span class="menu-badge-inner">{item.icon}</span></span>
-                                <button
-                                    class="menu-button"
-                                    onMouseEnter={() => setHovered(item.hoveringLabel)}
-                                    onMouseLeave={() => setHovered(null)}
-                                    onClick={() => navigate(item.route)}
-                                >
-                                    <span class="font-old text-lg">{item.label}</span>
-                                </button>
-                            </div>
+                            <ButtonMenu label={item.label} 
+                                        icon={item.icon} 
+                                        onMouseEnter={() => setHovered(item.hoveringLabel)} 
+                                        onMouseLeave={() => setHovered(null)} 
+                                        onClick={() => navigate(item.route)} />
                         )}
                     </For>
                 </section>

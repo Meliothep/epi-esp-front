@@ -413,8 +413,13 @@ const CampaignSessionPage: Component = () => {
             startNodeId = active.currentNodeId;
             dbNodeId = active.currentNodeId;
           }
-        } else {
+        } else if (response.isDungeonMaster) {
           // Première fois (ou session précédente terminée) : nouvelle session.
+          // Seul le MJ de la campagne crée la session DB — quand chaque joueur
+          // qui montait cette page en créait une aussi, des sessions Active
+          // fantômes s'accumulaient (désynchro "session en cours" + reprise
+          // sur la mauvaise session). Les joueurs suivent la progression via
+          // NodeAdvanced ; sessionId reste null pour eux si rien d'actif.
           // Fix #2 : si deux instances du composant montent simultanément,
           // elles partagent la même Promise → une seule session créée en base.
           if (!_pendingSessionCreate.has(params.id)) {

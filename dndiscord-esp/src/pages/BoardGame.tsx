@@ -429,6 +429,19 @@ const BoardGame: Component = () => {
     // Guard 2 — story-tree flow owns the board; suppress hub re-init so a
     // stale gameStartedPayload can't overwrite the session-map FREE_ROAM.
     if (isSessionMapActive()) return;
+    // Guard 2b — 'campaign' est le marqueur du flux scénario (StartGame du
+    // lobby), pas une vraie carte. L'initialiser ici chargerait la grille
+    // procédurale par défaut → "map vide". Cas typique : refresh/rejoin sur
+    // /practice/session pendant une session scénario, où le serveur rejoue
+    // GameStarted avec mapId='campaign'. On renvoie vers la page scénario.
+    if (payload.mapId === "campaign") {
+      const cid = sessionState.session?.campaignId;
+      if (cid) {
+        console.log("[BoardGame] GameStarted(mapId='campaign') — redirecting to campaign session page");
+        navigate(`/campaigns/${cid}/session`);
+      }
+      return;
+    }
     onMultiplayerGameStart(payload);
   });
 

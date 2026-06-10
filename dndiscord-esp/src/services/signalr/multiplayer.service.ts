@@ -79,6 +79,7 @@ const HUB = {
   createSession: "CreateSession",
   joinSession: "JoinSession",
   joinCampaignSession: "JoinCampaignSession",
+  getActiveCampaignSession: "GetActiveCampaignSession",
   leaveSession: "LeaveSession",
   kickPlayer: "KickPlayer",
   createRoom: "CreateRoom",
@@ -240,6 +241,23 @@ export async function joinSession(sessionId: string): Promise<JoinResult> {
     await tryBindDiscordVoiceToSession(result.session.sessionId);
   }
   return result;
+}
+
+/**
+ * Lecture seule : session live (in-memory hub) d'une campagne, ou null.
+ * Sert à valider la bannière "session en cours" contre l'état réel du hub —
+ * la session DB (REST) peut rester Active alors que la session SignalR
+ * n'existe plus (MJ parti, nettoyage serveur) → bannière fantôme.
+ */
+export async function getActiveCampaignSession(
+  campaignId: string,
+): Promise<SessionInfo | null> {
+  const raw = await signalRService.invoke(
+    HUB.getActiveCampaignSession,
+    campaignId,
+  );
+  if (!raw) return null;
+  return normalizeSession(raw as Record<string, unknown>);
 }
 
 /**

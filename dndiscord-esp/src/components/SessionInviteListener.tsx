@@ -9,6 +9,8 @@ import {
 } from "../services/signalr/multiplayer.service";
 import { getDiscordContextIds } from "../services/discord";
 import { authStore } from "../stores/auth.store";
+import { sessionState, getHubUserId } from "../stores/session.store";
+import { CampaignService, hasScenario } from "../services/campaign.service";
 
 type SessionStartedPayload = {
   sessionId: string;
@@ -20,6 +22,21 @@ type SessionStartedPayload = {
   timestamp?: string;
 };
 
+// Mémoire module : invites refusées/déjà vues — pas de re-pop en changeant de page.
+const handledSessionIds = new Set<string>();
+
+function parsePayload(data: Record<string, unknown>): SessionStartedPayload {
+  return {
+    sessionId: String(data.sessionId ?? data.SessionId ?? ""),
+    campaignId: String(data.campaignId ?? data.CampaignId ?? ""),
+    startedByUserId: (data.startedByUserId ?? data.StartedByUserId) as string | undefined,
+    startedByUserName: (data.startedByUserName ?? data.StartedByUserName) as string | undefined,
+    guildId: (data.guildId ?? data.GuildId) as string | undefined,
+    voiceChannelId: (data.voiceChannelId ?? data.VoiceChannelId) as string | undefined,
+    timestamp: (data.timestamp ?? data.Timestamp) as string | undefined,
+  };
+}
+
 export default function SessionInviteListener() {
   const navigate = useNavigate();
   const [invite, setInvite] = createSignal<SessionStartedPayload | null>(null);
@@ -29,8 +46,25 @@ export default function SessionInviteListener() {
   let cleanupFn: (() => void) | null = null;
   onCleanup(() => cleanupFn?.());
 
+  const isOwnInvite = (payload: SessionStartedPayload): boolean => {
+    if (!payload.startedByUserId) return false;
+    const ids = [authStore.user()?.id, getHubUserId()].filter(Boolean).map(String);
+    return ids.includes(String(payload.startedByUserId));
+  };
+
+  const showInvite = (payload: SessionStartedPayload) => {
+    if (!payload.sessionId) return;
+    if (handledSessionIds.has(payload.sessionId)) return;
+    if (isOwnInvite(payload)) return;
+    // Pas d'invite si déjà dans une session en cours.
+    if (sessionState.session) return;
+
+    handledSessionIds.add(payload.sessionId);
+    setError(null);
+    setInvite(payload);
+  };
+
   onMount(async () => {
-    // On ne force pas la connexion si l'utilisateur n'est pas auth
     if (!authStore.isAuthenticated()) return;
 
     try {
@@ -50,48 +84,24 @@ export default function SessionInviteListener() {
         voiceChannelId = ctx?.voiceChannelId || ctx?.channelId || "";
       }
 
-      const handler = (data: Record<string, unknown>) => {
-        const payload: SessionStartedPayload = {
-          sessionId: String(data.sessionId ?? data.SessionId ?? ""),
-          campaignId: String(data.campaignId ?? data.CampaignId ?? ""),
-          startedByUserId: (data.startedByUserId ?? data.StartedByUserId) as
-            | string
-            | undefined,
-          startedByUserName: (data.startedByUserName ??
-            data.StartedByUserName) as string | undefined,
-          guildId: (data.guildId ?? data.GuildId) as string | undefined,
-          voiceChannelId: (data.voiceChannelId ?? data.VoiceChannelId) as
-            | string
-            | undefined,
-          timestamp: (data.timestamp ?? data.Timestamp) as string | undefined,
-        };
+      const activityHandler = (data: Record<string, unknown>) =>
+        showInvite(parsePayload(data));
+      // Invite de campagne — envoyée par le back à tous les membres connectés,
+      // où qu'ils soient dans l'app.
+      const campaignHandler = (data: Record<string, unknown>) =>
+        showInvite(parsePayload(data));
 
-        if (!payload.sessionId) return;
+      signalRService.on("ActivitySessionStarted", activityHandler);
+      signalRService.on("SessionStarted", campaignHandler);
 
-        // Ne pas afficher la demande à celui qui a démarré la session
-        const me = authStore.user()?.id;
-        if (
-          me &&
-          payload.startedByUserId &&
-          String(payload.startedByUserId) === String(me)
-        ) {
-          return;
-        }
-
-        setError(null);
-        setInvite(payload);
-      };
-
-      signalRService.on("ActivitySessionStarted", handler);
-
-      // Abonnement "activité" (si on est bien dans Discord)
       if (guildId && voiceChannelId) {
         await subscribeActivity(guildId, voiceChannelId);
       }
 
       cleanupFn = () => {
         try {
-          signalRService.off("ActivitySessionStarted", handler);
+          signalRService.off("ActivitySessionStarted", activityHandler);
+          signalRService.off("SessionStarted", campaignHandler);
         } catch {}
 
         if (signalRService.isConnected && guildId && voiceChannelId) {
@@ -99,10 +109,14 @@ export default function SessionInviteListener() {
         }
       };
     } catch (e) {
-      // Best-effort: pas bloquant pour le reste de l'app
       console.warn("SessionInviteListener init failed:", e);
     }
   });
+
+  const decline = () => {
+    setInvite(null);
+    // L'invite reste rejoignable depuis la page de la campagne (bannière).
+  };
 
   const accept = async () => {
     const i = invite();
@@ -121,10 +135,22 @@ export default function SessionInviteListener() {
         return;
       }
       setInvite(null);
-      // No scenario gate available outside the campaign page — the multiplayer
-      // lobby (BoardGame at /practice/multiplayer) handles both POC Quick Launch
-      // and recovers to LobbyScreen via the existing-session branch in onMount.
-      navigate(i.campaignId ? `/practice/multiplayer` : "/practice");
+
+      // Campagne avec scénario → lobby de campagne, sinon lobby multijoueur libre.
+      if (i.campaignId) {
+        try {
+          const campaign = await CampaignService.getCampaign(i.campaignId);
+          if (hasScenario(campaign.campaignTreeDefinition)) {
+            navigate(`/campaigns/${i.campaignId}/lobby`);
+            return;
+          }
+        } catch {
+          // Détail campagne indisponible — fallback lobby générique.
+        }
+        navigate(`/practice/multiplayer`);
+      } else {
+        navigate("/practice");
+      }
     } catch (err: any) {
       setError(err?.message ?? "Failed to join session.");
     } finally {
@@ -136,7 +162,7 @@ export default function SessionInviteListener() {
     <Show when={invite()}>
       <div
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-        onClick={() => setInvite(null)}
+        onClick={decline}
       >
         <div
           class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4"
@@ -158,7 +184,7 @@ export default function SessionInviteListener() {
 
           <div class="flex gap-3">
             <button
-              onClick={() => setInvite(null)}
+              onClick={decline}
               class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all"
               disabled={joining()}
             >

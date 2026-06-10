@@ -19,6 +19,7 @@ import {
   unsubscribeCampaign,
   selectCharacter,
   broadcastCampaignSessionCompleted,
+  leaveSession,
 } from '@/services/signalr/multiplayer.service';
 import { signalRService } from '@/services/signalr/SignalRService';
 import { ensureMultiplayerHandlersRegistered } from '@/services/signalr/multiplayer.service';
@@ -649,6 +650,15 @@ const CampaignSessionPage: Component = () => {
       } catch (e) {
         console.warn('Failed to complete session:', e);
       }
+    }
+    // Filet de sécurité : si le teardown serveur (completeSession → notifier)
+    // a échoué, le départ du MJ supprime la session in-memory du hub — sinon
+    // GetActiveCampaignSession la retrouve et CampaignView affiche un bandeau
+    // "session en cours" fantôme. No-op si la session a déjà été supprimée.
+    try {
+      await leaveSession();
+    } catch (e) {
+      console.warn('[CampaignSession] leaveSession after complete failed:', e);
     }
     navigate(`/campaigns/${params.id}`);
   };

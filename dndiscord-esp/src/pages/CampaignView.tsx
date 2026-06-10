@@ -169,12 +169,22 @@ export default function CampaignView() {
         } as GameSessionResponse);
       };
 
+      // Masquer le bandeau dès que la session est complétée (broadcast envoyé
+      // au groupe campagne par le back lors du completeSession REST).
+      const completedHandler = (data: Record<string, unknown>) => {
+        const cid = String(data.campaignId ?? data.CampaignId ?? "");
+        if (cid && cid.toLowerCase() !== params.id.toLowerCase()) return;
+        setActiveSession(null);
+      };
+
       signalRService.on("SessionStarted", handler);
+      signalRService.on("CampaignSessionCompleted", completedHandler);
       await subscribeCampaign(mappedCampaign.id);
 
       onCleanup(() => {
         try {
           signalRService.off("SessionStarted", handler);
+          signalRService.off("CampaignSessionCompleted", completedHandler);
         } catch {}
         // Best-effort: si la connexion est encore active, on se désabonne du groupe.
         if (signalRService.isConnected) {

@@ -16,6 +16,7 @@ import {
   selectDefaultTemplate,
   startGame as startGameHub,
   joinCampaignSession,
+  getActiveCampaignSession,
   leaveSession,
 } from '@/services/signalr/multiplayer.service';
 import { CharacterService, CharacterClass, type CharacterDto } from '@/services/character.service';
@@ -137,6 +138,19 @@ const CampaignLobbyPage: Component = () => {
 
   const stalePayload = sessionState.gameStartedPayload;
 
+  /** Navigue vers la bonne page de jeu pour un payload GameStarted. */
+  const navigateForGameStart = (payload: { mapId: string }) => {
+    if (payload.mapId === 'campaign') {
+      // Flux scénario classique → CampaignSessionPage (arbre de blocs)
+      navigate(`/campaigns/${params.id}/session`);
+    } else {
+      // Quick launch (ou lancement direct de carte) → board directement
+      // BoardGame détectera la session InProgress et appellera
+      // onMultiplayerGameStart avec le payload pour démarrer le jeu.
+      navigate('/practice/session');
+    }
+  };
+
   // ── Mount ───────────────────────────────────────────────────────────────────
   onMount(async () => {
     if (!signalRService.isConnected) {
@@ -148,6 +162,18 @@ const CampaignLobbyPage: Component = () => {
     // createEffect jamais déclenché → bouton "Lancement…" bloqué indéfiniment.
     ensureMultiplayerHandlersRegistered();
 
+    // Late-join d'une session déjà lancée (bannière "Rejoindre" de la page
+    // campagne) : le serveur rejoue GameStarted dès le JoinSession, donc le
+    // payload arrive AVANT le mount de ce composant. Le guard stalePayload du
+    // createEffect l'ignorerait et le joueur resterait bloqué dans le lobby —
+    // on navigue immédiatement quand la session est déjà InProgress.
+    const joinedSession = sessionState.session;
+    const replayedPayload = sessionState.gameStartedPayload;
+    if (joinedSession?.state === SessionState.InProgress && replayedPayload) {
+      navigateForGameStart(replayedPayload);
+      return;
+    }
+
     // Vérifier si une session est déjà en cours pour cette campagne.
     // On n'affiche le bandeau que si la session a une progression réelle
     // (currentNodeId défini OU au moins une entrée d'historique).
@@ -155,14 +181,23 @@ const CampaignLobbyPage: Component = () => {
     // créées par CampaignSessionPage mais jamais jouées.
     try {
       const sessionsRes = await CampaignService.listSessions(params.id);
-      // On cherche les sessions actives avec progression réelle.
-      // Le lancement rapide utilise désormais createRoom (pas de session DB),
-      // donc les sessions sans progression sont des sessions fantômes à ignorer.
       const running = sessionsRes.items.find(
         s => s.status === GameSessionStatus.Active &&
              (!!s.currentNodeId || s.entries.length > 0)
       );
-      if (running) setActiveSession(running);
+      // Bannière pilotée par le hub : session live requise (jamais de session
+      // DB fantôme), et seulement si l'utilisateur n'est pas déjà dedans.
+      const live = await getActiveCampaignSession(params.id).catch(() => null);
+      if (live && !sessionState.session) {
+        setActiveSession(running ?? ({
+          id: live.sessionId,
+          campaignId: params.id,
+          status: GameSessionStatus.Active,
+          startedBy: '',
+          startedAt: new Date().toISOString(),
+          entries: [],
+        } as GameSessionResponse));
+      }
     } catch {
       // Non-critique
     }
@@ -226,15 +261,7 @@ const CampaignLobbyPage: Component = () => {
   createEffect(() => {
     const payload = sessionState.gameStartedPayload;
     if (payload && payload !== stalePayload) {
-      if (payload.mapId === 'campaign') {
-        // Flux scénario classique → CampaignSessionPage (arbre de blocs)
-        navigate(`/campaigns/${params.id}/session`);
-      } else {
-        // Quick launch (ou lancement direct de carte) → board directement
-        // BoardGame détectera la session InProgress et appellera
-        // onMultiplayerGameStart avec le payload pour démarrer le jeu.
-        navigate('/practice/session');
-      }
+      navigateForGameStart(payload);
     }
   });
 

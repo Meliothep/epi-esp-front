@@ -42,7 +42,7 @@ import {
 import {
   createSession,
   ensureMultiplayerHandlersRegistered,
-  joinSession,
+  getActiveCampaignSession,
   joinCampaignSession,
   subscribeCampaign,
   unsubscribeCampaign,
@@ -64,16 +64,6 @@ export default function CampaignView() {
   const [launchingSession, setLaunchingSession] = createSignal(false); // lancement scénario
   const [quickLaunching,   setQuickLaunching]   = createSignal(false); // lancement rapide
   const [launchError, setLaunchError] = createSignal<string | null>(null);
-  const [sessionInvite, setSessionInvite] = createSignal<{
-    sessionId: string;
-    campaignId: string;
-    startedByUserId?: string;
-    startedByUserName?: string;
-    timestamp?: string;
-  } | null>(null);
-  const [joiningInvite, setJoiningInvite] = createSignal(false);
-  const [inviteError, setInviteError] = createSignal<string | null>(null);
-
   // Active session already running when the page loads
   const [activeSession, setActiveSession] = createSignal<GameSessionResponse | null>(null);
   const [joiningActive, setJoiningActive] = createSignal(false);
@@ -115,14 +105,14 @@ export default function CampaignView() {
       // A session with status=Active but no progress is a ghost session
       // created by an earlier CampaignSessionPage visit that was never
       // played — showing the banner for it would be misleading.
+      let runningDbSession: GameSessionResponse | undefined;
       try {
         const sessionsRes = await CampaignService.listSessions(params.id);
-        const running = sessionsRes.items.find(
+        runningDbSession = sessionsRes.items.find(
           (s) =>
             s.status === GameSessionStatus.Active &&
             (!!s.currentNodeId || s.entries.length > 0)
         );
-        if (running) setActiveSession(running);
       } catch {
         // Non-critical — page still works without it.
       }
@@ -133,6 +123,25 @@ export default function CampaignView() {
         await signalRService.connect();
       }
       ensureMultiplayerHandlersRegistered();
+
+      // Bannière "Rejoindre" pilotée par le hub : affichée dès qu'une session
+      // live existe (même en Lobby, ex. invite refusée puis retour ici), jamais
+      // pour une session DB fantôme sans session SignalR.
+      try {
+        const live = await getActiveCampaignSession(params.id);
+        if (live) {
+          setActiveSession(runningDbSession ?? ({
+            id: live.sessionId,
+            campaignId: params.id,
+            status: GameSessionStatus.Active,
+            startedBy: "",
+            startedAt: new Date().toISOString(),
+            entries: [],
+          } as GameSessionResponse));
+        }
+      } catch {
+        // Hub injoignable — pas de bannière non actionnable.
+      }
 
       const handler = (data: Record<string, unknown>) => {
         const payload = {
@@ -149,6 +158,7 @@ export default function CampaignView() {
         if (!payload.sessionId) return;
 
         // Update / create the active-session banner regardless of who started it.
+        // La modale d'invitation est gérée globalement par SessionInviteListener.
         setActiveSession((prev) => prev ?? {
           id: payload.sessionId,
           campaignId: payload.campaignId,
@@ -157,19 +167,6 @@ export default function CampaignView() {
           startedAt: payload.timestamp ?? new Date().toISOString(),
           entries: [],
         } as GameSessionResponse);
-
-        // Ne pas afficher la modale au joueur qui a démarré la session.
-        const me = authStore.user()?.id;
-        if (
-          me &&
-          payload.startedByUserId &&
-          String(payload.startedByUserId) === String(me)
-        ) {
-          return;
-        }
-
-        setInviteError(null);
-        setSessionInvite(payload);
       };
 
       signalRService.on("SessionStarted", handler);
@@ -250,38 +247,6 @@ export default function CampaignView() {
       setLaunchError(e?.message ?? "Failed to create session.");
     } finally {
       setQuickLaunching(false);
-    }
-  };
-
-  const handleJoinInvite = async () => {
-    const invite = sessionInvite();
-    if (!invite) return;
-    setInviteError(null);
-    setJoiningInvite(true);
-    try {
-      if (!signalRService.isConnected) {
-        await signalRService.connect();
-      }
-      ensureMultiplayerHandlersRegistered();
-      const res = await joinSession(invite.sessionId);
-      if (!res.success) {
-        setInviteError(res.message ?? "Failed to join session.");
-        return;
-      }
-      setSessionInvite(null);
-      // Route based on whether the campaign has an authored story-tree:
-      //   - With scenario → CampaignLobbyPage → /session (story tree) → maps.
-      //   - Without scenario (POC Quick Launch flow) → /practice/multiplayer
-      //     so the joiner lands in the same sandbox LobbyScreen as the DM.
-      if (invite.campaignId && hasScenario(campaign()?.campaignTreeDefinition)) {
-        navigate(`/campaigns/${invite.campaignId}/lobby`);
-      } else {
-        navigate(invite.campaignId ? `/practice/multiplayer` : "/practice");
-      }
-    } catch (e: any) {
-      setInviteError(e?.message ?? "Failed to join session.");
-    } finally {
-      setJoiningInvite(false);
     }
   };
 
@@ -1001,53 +966,6 @@ export default function CampaignView() {
           >
             <X class="w-4 h-4" aria-hidden="true" />
           </button>
-        </div>
-      </Show>
-
-      {/* Session invite modal (SessionStarted) */}
-      <Show when={sessionInvite()}>
-        <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setSessionInvite(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="session-invite-title"
-        >
-          <div
-            class="bg-game-dark border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="session-invite-title" class="text-xl font-display text-white mb-3">
-              {t("campaignView.sessionInvite.title")}
-            </h2>
-            <p class="text-slate-300 mb-4">
-              <span class="text-purple-300 font-semibold">
-                {sessionInvite()?.startedByUserName || t("campaignView.sessionInvite.aPlayer")}
-              </span>{" "}
-              {t("campaignView.sessionInvite.body")}
-            </p>
-            <Show when={inviteError()}>
-              <p class="mb-3 text-red-400 text-sm" role="alert">{inviteError()}</p>
-            </Show>
-            <div class="flex gap-3">
-              <button
-                onClick={() => setSessionInvite(null)}
-                class="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                disabled={joiningInvite()}
-              >
-                {t("campaignView.sessionInvite.later")}
-              </button>
-              <button
-                onClick={handleJoinInvite}
-                class="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-white transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                disabled={joiningInvite()}
-              >
-                <Show when={joiningInvite()} fallback={t("campaignView.sessionInvite.join")}>
-                  {t("campaignView.sessionInvite.joining")}
-                </Show>
-              </button>
-            </div>
-          </div>
         </div>
       </Show>
 
